@@ -1,40 +1,40 @@
 import telebot
 import gspread
-from google.oauth2.service_account import Credentials
+import json
+import os
 import datetime
 import schedule
 import threading
 import time
-import os
 from datetime import timedelta
 
 # Ключи из переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 SHEET_ID = os.getenv('SHEET_ID')
 CHAT_ID = int(os.getenv('CHAT_ID', '0'))
+GOOGLE_CREDENTIALS_JSON = os.getenv('GOOGLE_CREDENTIALS_JSON')
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Источники
 SOURCES = ['Avito Ads', 'Яндекс.Директ', 'VK Реклама']
 
+# Инициализация Google Sheets
 try:
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-import json
-creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
-if creds_json:
-    creds_dict = json.loads(creds_json)
-    gc = gspread.service_account_from_dict(creds_dict)
-else:
-    gc = gspread.service_account(filename='credentials.json')
-        print("✅ Google Sheets подключен")
+    if GOOGLE_CREDENTIALS_JSON:
+        creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+        gc = gspread.service_account_from_dict(creds_dict)
+    else:
+        gc = gspread.service_account(filename='credentials.json')
+    
+    workbook = gc.open_by_key(SHEET_ID)
+    leads_sheet = workbook.worksheet('leads')
+    budget_sheet = workbook.worksheet('budget')
+    print("✅ Google Sheets подключен")
 except Exception as e:
     print(f"❌ Ошибка: {e}")
     leads_sheet = None
     budget_sheet = None
-workbook = gc.open_by_key(SHEET_ID)
-leads_sheet = workbook.worksheet('leads')
-budget_sheet = workbook.worksheet('budget')
 
 def build_report(start_date, end_date):
     """Собирает отчёт за период"""
@@ -173,8 +173,8 @@ if __name__ == '__main__':
     
     print("🚀 Бот запущен!")
     print("💬 Команды:")
-    print("  /stats 2025-11-01 2025-11-30")
-    print("  /stats_week")
-    print("  /stats_month")
+    print(" /stats 2025-11-01 2025-11-30")
+    print(" /stats_week")
+    print(" /stats_month")
     
     bot.polling(none_stop=True)
