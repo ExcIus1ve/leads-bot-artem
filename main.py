@@ -20,15 +20,13 @@ SOURCES = ['Avito Ads', 'Яндекс.Директ', 'VK Реклама']
 
 try:
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-gc = gspread.service_account(filename='credentials.json')
-# Или если credentials.json из переменной окружения (Bothost):
-# import json
-# creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
-# if creds_json:
-#     creds_dict = json.loads(creds_json)
-#     gc = gspread.service_account_from_dict(creds_dict)
-# else:
-#     gc = gspread.service_account(filename='credentials.json')    workbook = gc.open_by_key(SHEET_ID)
+import json
+creds_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+if creds_json:
+    creds_dict = json.loads(creds_json)
+    gc = gspread.service_account_from_dict(creds_dict)
+else:
+    gc = gspread.service_account(filename='credentials.json')
     leads_sheet = workbook.worksheet('leads')
     budget_sheet = workbook.worksheet('budget')
     print("✅ Google Sheets подключен")
