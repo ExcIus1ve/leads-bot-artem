@@ -6,139 +6,169 @@ import schedule
 import threading
 import time
 import os
+from datetime import timedelta
 
-# Ключи из переменных окружения (БЕЗОПАСНО)
+# Ключи из переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 SHEET_ID = os.getenv('SHEET_ID')
-CHAT_ID = int(os.getenv('CHAT_ID'))
+CHAT_ID = int(os.getenv('CHAT_ID', '0'))
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-SOURCES = {
-    'avito_ads': 'Avito Ads',
-    'avito ads': 'Avito Ads',
-    'avito': 'Avito',
-    'yandex': 'Yandex.Direct',
-    'vk': 'VK Ads',
-}
+# Источники
+SOURCES = ['Avito Ads', 'Яндекс.Директ', 'VK Реклама']
 
 try:
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     gc = gspread.service_account(filename='credentials.json')
-    wb = gc.open_by_key(SHEET_ID)
-    sheet_leads = wb.worksheet('leads')
-    sheet_budget = wb.worksheet('budget')
-    print("OK Google Sheets")
+    workbook = gc.open_by_key(SHEET_ID)
+    leads_sheet = workbook.worksheet('leads')
+    budget_sheet = workbook.worksheet('budget')
+    print("✅ Google Sheets подключен")
 except Exception as e:
-    print(f"Error: {e}")
-    sheet_leads = None
-    sheet_budget = None
-
-def get_source_from_text(text):
-    text_lower = text.lower()
-    for keyword, source in SOURCES.items():
-        if keyword in text_lower:
-            return source
-    return 'Avito'
-
-def get_budget_for_period(source, start_date, end_date):
-    if not sheet_budget:
-        return 0
-    try:
-        all_rows = sheet_budget.get_all_values()
-        total = 0
-        for row in all_rows[1:]:
-            if len(row) >= 3:
-                date_str = row[0]
-                source_name = row[1]
-                try:
-                    budget = float(row[2]) if row[2] else 0
-                except:
-                    budget = 0
-                try:
-                    row_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                    if start_date <= row_date <= end_date and source_name == source:
-                        total += budget
-                except:
-                    pass
-        return total
-    except:
-        return 0
-
-def get_leads_for_period(source, start_date, end_date):
-    if not sheet_leads:
-        return 0
-    try:
-        all_rows = sheet_leads.get_all_values()
-        total = 0
-        for row in all_rows[1:]:
-            if len(row) >= 3:
-                date_str = row[0]
-                source_name = row[1]
-                try:
-                    leads = int(row[2]) if row[2] else 0
-                except:
-                    leads = 0
-                try:
-                    row_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                    if start_date <= row_date <= end_date and source_name == source:
-                        total += leads
-                except:
-                    pass
-        return total
-    except:
-        return 0
+    print(f"❌ Ошибка: {e}")
+    leads_sheet = None
+    budget_sheet = None
 
 def build_report(start_date, end_date):
-    report = f"Stats {start_date} to {end_date}\n\n"
-    total_leads = 0
-    total_budget = 0
-    sources_list = ['Avito', 'Avito Ads', 'Yandex.Direct', 'VK Ads']
-    for source in sources_list:
-        leads = get_leads_for_period(source, start_date, end_date)
-        budget = get_budget_for_period(source, start_date, end_date)
-        cpa = budget / leads if leads > 0 else 0
-        total_leads += leads
-        total_budget += budget
-        if leads > 0 or budget > 0:
-            report += f"{source}: {leads} leads, {budget:,} rub, CPA {cpa:.0f}\n"
-    total_cpa = total_budget / total_leads if total_leads > 0 else 0
-    report += f"\nTOTAL: {total_leads} leads, {total_budget:,} rub, CPA {total_cpa:.0f}"
-    return report
-
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.reply_to(message.chat.id, "Bot running!")
-
-@bot.message_handler(commands=['stats_week'])
-def stats_week(message):
-    end_date = datetime.date.today()
-    start_date = end_date - datetime.timedelta(days=7)
-    bot.reply_to(message.chat.id, build_report(start_date, end_date))
+    """Собирает отчёт за период"""
+    if not leads_sheet or not budget_sheet:
+        return "❌ Google Sheets не подключен"
+    
+    try:
+        leads_rows = leads_sheet.get_all_records()
+        budget_rows = budget_sheet.get_all_records()
+        
+        stats = {source: {'leads': 0, 'budget': 0} for source in SOURCES}
+        
+        for row in leads_rows:
+            try:
+                row_date = datetime.datetime.strptime(row['Дата'], '%Y-%m-%d').date()
+                if start_date <= row_date <= end_date:
+                    source = row['Источник']
+                    if source in stats:
+                        stats[source]['leads'] += int(row.get('Лидов', 0) or 0)
+            except:
+                continue
+        
+        for row in budget_rows:
+            try:
+                row_date = datetime.datetime.strptime(row['Дата'], '%Y-%m-%d').date()
+                if start_date <= row_date <= end_date:
+                    source = row['Источник']
+                    if source in stats:
+                        stats[source]['budget'] += float(row.get('Бюджет ₽', 0) or 0)
+            except:
+                continue
+        
+        report = f"📊 Отчёт за период {start_date} — {end_date}\n\n"
+        total_leads = 0
+        total_budget = 0
+        
+        for source in SOURCES:
+            leads = stats[source]['leads']
+            budget = stats[source]['budget']
+            cpa = budget / leads if leads > 0 else 0
+            total_leads += leads
+            total_budget += budget
+            report += f"<b>{source}</b>\nЛидов: {leads}\nСтоимость лида: {cpa:.0f} ₽\n\n"
+        
+        total_cpa = total_budget / total_leads if total_leads > 0 else 0
+        report += f"<b>Общая статистика</b>\nЛидов: {total_leads}\nСтоимость лида: {total_cpa:.0f} ₽\nПотрачено: {total_budget:,.0f} ₽"
+        return report
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
 
 @bot.message_handler(commands=['stats'])
-def stats_custom(message):
-    try:
-        args = message.text.split()
-        if len(args) != 3:
-            bot.reply_to(message.chat.id, "Use: /stats 2025-11-01 2025-11-30")
-            return
-        start_date = datetime.datetime.strptime(args[1], '%Y-%m-%d').date()
-        end_date = datetime.datetime.strptime(args[2], '%Y-%m-%d').date()
-        bot.reply_to(message.chat.id, build_report(start_date, end_date))
-    except:
-        bot.reply_to(message.chat.id, "Error!")
-
-@bot.message_handler(func=lambda m: any(word in m.text.lower() for word in ['lead', 'cottage', 'house']))
-def catch_lead(message):
-    source = get_source_from_text(message.text)
-    today = datetime.date.today()
-    if sheet_leads:
+def handle_stats(message):
+    args = message.text.split()
+    if len(args) == 3:
         try:
-            sheet_leads.append_row([today.strftime('%Y-%m-%d'), source, 1])
+            start_date = datetime.datetime.strptime(args[1], '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(args[2], '%Y-%m-%d').date()
+            report = build_report(start_date, end_date)
+            bot.send_message(message.chat.id, report, parse_mode='HTML')
         except:
-            pass
-    bot.reply_to(message.chat.id, f"Lead recorded: {source}")
+            bot.send_message(message.chat.id, "❌ Неверный формат. Используйте: /stats 2025-11-01 2025-11-30")
+    else:
+        bot.send_message(message.chat.id, "📊 Формат: /stats 2025-11-01 2025-11-30")
 
-print("Bot started")
-bot.polling(none_stop=True)
+@bot.message_handler(commands=['stats_week'])
+def handle_stats_week(message):
+    today = datetime.date.today()
+    start_date = today - timedelta(days=7)
+    report = build_report(start_date, today)
+    bot.send_message(message.chat.id, report, parse_mode='HTML')
+
+@bot.message_handler(commands=['stats_month'])
+def handle_stats_month(message):
+    today = datetime.date.today()
+    first_day_this_month = today.replace(day=1)
+    last_day_prev_month = first_day_this_month - timedelta(days=1)
+    first_day_prev_month = last_day_prev_month.replace(day=1)
+    report = build_report(first_day_prev_month, last_day_prev_month)
+    bot.send_message(message.chat.id, report, parse_mode='HTML')
+
+@bot.message_handler(func=lambda m: any(word in m.text.lower() for word in ['заявка', 'коттедж', 'дом', 'построить', 'смета', 'проект']))
+def catch_lead(message):
+    if not leads_sheet:
+        bot.reply_to(message, "❌ Google Sheets не подключен")
+        return
+    
+    source = 'Avito Ads'
+    if 'yandex' in message.text.lower() or 'директ' in message.text.lower():
+        source = 'Яндекс.Директ'
+    elif 'vk' in message.text.lower() or 'вк' in message.text.lower():
+        source = 'VK Реклама'
+    
+    try:
+        today = datetime.date.today().isoformat()
+        leads_sheet.append_row([today, source, 1])
+        bot.reply_to(message, f"✅ Лид зафиксирован из {source}")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Ошибка: {e}")
+
+def send_weekly_report():
+    """Еженедельный отчёт"""
+    today = datetime.date.today()
+    start_date = today - timedelta(days=7)
+    report = build_report(start_date, today)
+    try:
+        bot.send_message(CHAT_ID, report, parse_mode='HTML')
+        print(f"✅ Еженедельный отчёт отправлен {today}")
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+
+def send_monthly_report():
+    """Ежемесячный отчёт"""
+    today = datetime.date.today()
+    first_day_this_month = today.replace(day=1)
+    last_day_prev_month = first_day_this_month - timedelta(days=1)
+    first_day_prev_month = last_day_prev_month.replace(day=1)
+    report = build_report(first_day_prev_month, last_day_prev_month)
+    try:
+        bot.send_message(CHAT_ID, report, parse_mode='HTML')
+        print(f"✅ Ежемесячный отчёт отправлен {today}")
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+
+def schedule_jobs():
+    """Планировщик"""
+    schedule.every().monday.at("10:00").do(send_weekly_report)
+    schedule.every().day.at("10:00").do(lambda: send_monthly_report() if datetime.date.today().day == 1 else None)
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
+
+if __name__ == '__main__':
+    scheduler_thread = threading.Thread(target=schedule_jobs, daemon=True)
+    scheduler_thread.start()
+    
+    print("🚀 Бот запущен!")
+    print("💬 Команды:")
+    print("  /stats 2025-11-01 2025-11-30")
+    print("  /stats_week")
+    print("  /stats_month")
+    
+    bot.polling(none_stop=True)
