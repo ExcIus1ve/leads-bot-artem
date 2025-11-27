@@ -27,6 +27,7 @@ if creds_json:
     gc = gspread.service_account_from_dict(creds_dict)
 else:
     gc = gspread.service_account(filename='credentials.json')
+    workbook = gc.open_by_key(SHEET_ID)
     leads_sheet = workbook.worksheet('leads')
     budget_sheet = workbook.worksheet('budget')
     print("✅ Google Sheets подключен")
