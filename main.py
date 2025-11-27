@@ -27,14 +27,14 @@ if creds_json:
     gc = gspread.service_account_from_dict(creds_dict)
 else:
     gc = gspread.service_account(filename='credentials.json')
-    workbook = gc.open_by_key(SHEET_ID)
-    leads_sheet = workbook.worksheet('leads')
-    budget_sheet = workbook.worksheet('budget')
-    print("✅ Google Sheets подключен")
+        print("✅ Google Sheets подключен")
 except Exception as e:
     print(f"❌ Ошибка: {e}")
     leads_sheet = None
     budget_sheet = None
+workbook = gc.open_by_key(SHEET_ID)
+leads_sheet = workbook.worksheet('leads')
+budget_sheet = workbook.worksheet('budget')
 
 def build_report(start_date, end_date):
     """Собирает отчёт за период"""
