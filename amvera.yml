@@ -1,16 +1,17 @@
 appInstanceName: leads-bot
 registryAddress: amveraregistry.azurecr.io
-installationType: containerServiceAccount: shkadin
+installationType: container
+serviceAccount: shkadin
 image: amveraregistry.azurecr.io/leads-bot:latest
 registryServiceAccountJsonKeySecret: DOCKER_REGISTRY_JSON
 instances: 1
 resources:
   limits:
     memory: 512M
-    cpu: 0.1
+    cpu: 100m
   requests:
     memory: 256M
-    cpu: 0.05
+    cpu: 50m
 env:
   - name: BOT_TOKEN
     valueFrom:
@@ -32,6 +33,3 @@ env:
       secretKeyRef:
         name: GOOGLE_CREDENTIALS_JSON
         key: value
-ports:
-  - port: 80
-    containerPort: 8000
