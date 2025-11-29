@@ -1,4 +1,5 @@
-appInstanceName: leads-bot
+version: "1.0"
+pInstanceName: leads-bot
 registryAddress: amveraregistry.azurecr.io
 installationType: container
 serviceAccount: shkadin
