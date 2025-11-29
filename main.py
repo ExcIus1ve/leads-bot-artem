@@ -14,6 +14,12 @@ SHEET_ID = os.getenv('SHEET_ID')
 CHAT_ID = int(os.getenv('CHAT_ID', '0'))
 GOOGLE_CREDENTIALS_JSON = os.getenv('GOOGLE_CREDENTIALS_JSON')
 
+# Диагностика окружения — посмотрим, что реально приходит внутрь бота
+print("BOT_TOKEN is set:", bool(BOT_TOKEN))
+print("SHEET_ID:", SHEET_ID)
+print("CHAT_ID:", CHAT_ID)
+print("GOOGLE_CREDENTIALS_JSON is set:", bool(GOOGLE_CREDENTIALS_JSON))
+
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Источники
@@ -24,7 +30,7 @@ leads_sheet = None
 budget_sheet = None
 
 try:
-    # 1. Авторизация
+    # Авторизация
     if GOOGLE_CREDENTIALS_JSON:
         # креды пришли строкой из переменной окружения
         creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
@@ -33,16 +39,18 @@ try:
         # запасной вариант – creds из файла
         gc = gspread.service_account(filename='credentials.json')
 
-    # 2. Открываем таблицу по ID
+    # Открываем таблицу по ID
     workbook = gc.open_by_key(SHEET_ID)
 
-    # 3. Открываем листы
+    # Открываем листы
     leads_sheet = workbook.worksheet('leads')
     budget_sheet = workbook.worksheet('budget')
 
     print("✅ Google Sheets подключен")
 
 except Exception as e:
+    print("TYPE:", type(e))
+    print("DETAILS:", repr(e))
     print(f"❌ Ошибка подключения к Google Sheets: {e}")
     leads_sheet = None
     budget_sheet = None
